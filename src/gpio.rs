@@ -37,7 +37,7 @@ pub struct GPIOPin {
     id: PinId,
     mode: PinMode,
 
-    watch_callback: Option<Box<dyn FnMut(u32) + 'static>>,
+    watch_callback: Option<Box<dyn FnMut(PinValue) + 'static>>,
 }
 
 // This is a global registry of all the pins that have a watch set on them, so that we can keep the
@@ -46,7 +46,11 @@ static mut PIN_REGISTRY: Vec<*mut GPIOPin> = Vec::new();
 
 extern "C" fn pin_change_trampoline(user_data: *mut c_void, _pin_id: u32, value: u32) {
     let pin = unsafe { &mut *(user_data as *mut GPIOPin) };
-    pin.watch_callback.as_mut().unwrap()(value);
+    pin.watch_callback.as_mut().unwrap()(if value == 0 {
+        PinValue::Low
+    } else {
+        PinValue::High
+    });
 }
 
 impl GPIOPin {
@@ -99,9 +103,9 @@ impl GPIOPin {
         self.id
     }
 
-    pub fn watch<F>(&mut self, edge: u32, callback: F) -> bool
+    pub fn watch<F>(&mut self, edge: WatchEdge, callback: F) -> bool
     where
-        F: FnMut(u32) + 'static,
+        F: FnMut(PinValue) + 'static,
     {
         // if a callback already exists, return false
         if self.watch_callback.is_some() {
@@ -112,7 +116,7 @@ impl GPIOPin {
 
         let watch_config = WatchConfig {
             user_data: self as *mut _ as *const c_void,
-            edge,
+            edge: edge as u32,
             pin_change: pin_change_trampoline as *const c_void,
         };
 
