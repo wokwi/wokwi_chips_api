@@ -10,7 +10,7 @@ macro_rules! println {
   ($($arg:tt)*) => {
       {
           use core::fmt::Write;
-          writeln!($crate::Printer, $($arg)*).ok();
+          writeln!($crate::println::Printer, $($arg)*).ok();
       }
   };
 }
@@ -20,7 +20,7 @@ macro_rules! print {
   ($($arg:tt)*) => {
       {
           use core::fmt::Write;
-          write!($crate::Printer, $($arg)*).ok();
+          write!($crate::println::Printer, $($arg)*).ok();
       }
   };
 }
