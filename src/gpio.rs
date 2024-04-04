@@ -27,6 +27,17 @@ pub enum PinValue {
     High = HIGH as isize,
 }
 
+impl std::ops::Not for PinValue {
+    type Output = PinValue;
+
+    fn not(self) -> PinValue {
+        match self {
+            PinValue::Low => PinValue::High,
+            PinValue::High => PinValue::Low,
+        }
+    }
+}
+
 pub enum WatchEdge {
     Rising = RISING as isize,
     Falling = FALLING as isize,
