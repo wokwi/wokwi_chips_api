@@ -22,6 +22,7 @@ pub enum PinMode {
     OutputHigh = OUTPUT_HIGH as isize,
 }
 
+#[derive(Debug)]
 pub enum PinValue {
     Low = LOW as isize,
     High = HIGH as isize,
@@ -46,33 +47,47 @@ pub enum WatchEdge {
 
 pub struct Pin {
     id: PinId,
-    mode: PinMode,
+}
 
-    watch_callback: Option<Box<dyn FnMut(PinValue) + 'static>>,
+type WatchCallback = Box<dyn FnMut(Pin, PinValue) + 'static>;
+
+struct PinListener {
+    pin_id: PinId,
+    callback: WatchCallback,
 }
 
 // This is a global registry of all the pins that have a watch set on them, so that we can keep the
 // Rust callbacks alive as long as the watch is active.
-static mut PIN_REGISTRY: Vec<*mut Pin> = Vec::new();
+static mut CALLBACK_REGISTRY: Vec<PinListener> = Vec::new();
 
-extern "C" fn pin_change_trampoline(user_data: *mut c_void, _pin_id: u32, value: u32) {
-    let pin = unsafe { &mut *(user_data as *mut Pin) };
-    pin.watch_callback.as_mut().unwrap()(if value == 0 {
-        PinValue::Low
-    } else {
-        PinValue::High
-    });
+extern "C" fn pin_change_trampoline(_user_data: *mut c_void, pin_id: PinId, value: u32) {
+    let callback = unsafe {
+        CALLBACK_REGISTRY
+            .iter_mut()
+            .find(|listener| listener.pin_id == pin_id)
+            .map(|listener| &mut listener.callback)
+    };
+
+    if callback.is_none() {
+        return;
+    }
+
+    callback.unwrap()(
+        Pin { id: pin_id },
+        if value == 0 {
+            PinValue::Low
+        } else {
+            PinValue::High
+        },
+    );
 }
 
 impl Pin {
     pub fn new(name: &str, mode: PinMode) -> Self {
         let c_name = CString::new(name).unwrap();
         let id = unsafe { pinInit(c_name.as_ptr(), mode as u32) };
-        Self {
-            id,
-            mode,
-            watch_callback: None,
-        }
+
+        Self { id }
     }
 
     pub fn read(&self) -> PinValue {
@@ -99,12 +114,7 @@ impl Pin {
         self.write(PinValue::High);
     }
 
-    pub fn get_mode(&self) -> PinMode {
-        self.mode
-    }
-
     pub fn set_mode(&mut self, mode: PinMode) {
-        self.mode = mode;
         unsafe {
             pinMode(self.id, mode as u32);
         }
@@ -114,45 +124,29 @@ impl Pin {
         self.id
     }
 
-    pub fn watch<F>(&mut self, edge: WatchEdge, callback: F) -> bool
+    pub fn watch<F>(&self, edge: WatchEdge, callback: F) -> bool
     where
-        F: FnMut(PinValue) + 'static,
+        F: FnMut(Pin, PinValue) + 'static,
     {
-        // if a callback already exists, return false
-        if self.watch_callback.is_some() {
-            return false;
-        }
-
-        self.watch_callback = Some(Box::new(callback));
-
         let watch_config = WatchConfig {
-            user_data: self as *mut _ as *const c_void,
+            user_data: self as *const _ as *const c_void,
             edge: edge as u32,
             pin_change: pin_change_trampoline as *const c_void,
         };
 
-        let result = unsafe { pinWatch(self.id, &watch_config) };
-
-        if result {
-            unsafe {
-                PIN_REGISTRY.push(&mut *(self as *const _ as *mut Pin));
-            }
+        unsafe {
+            CALLBACK_REGISTRY.push(PinListener {
+                pin_id: self.id,
+                callback: Box::new(callback),
+            });
         }
 
-        result
+        unsafe { pinWatch(self.id, &watch_config) }
     }
 
     pub fn unwatch(&self) {
-        if self.watch_callback.is_none() {
-            return;
-        }
-
         unsafe {
             pinWatchStop(self.id);
-        }
-
-        unsafe {
-            PIN_REGISTRY.retain(|&pin| pin != (self as *const _ as *mut Pin));
         }
     }
 }
