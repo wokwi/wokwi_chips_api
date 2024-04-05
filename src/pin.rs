@@ -44,7 +44,7 @@ pub enum WatchEdge {
     Both = BOTH as isize,
 }
 
-pub struct GPIOPin {
+pub struct Pin {
     id: PinId,
     mode: PinMode,
 
@@ -53,10 +53,10 @@ pub struct GPIOPin {
 
 // This is a global registry of all the pins that have a watch set on them, so that we can keep the
 // Rust callbacks alive as long as the watch is active.
-static mut PIN_REGISTRY: Vec<*mut GPIOPin> = Vec::new();
+static mut PIN_REGISTRY: Vec<*mut Pin> = Vec::new();
 
 extern "C" fn pin_change_trampoline(user_data: *mut c_void, _pin_id: u32, value: u32) {
-    let pin = unsafe { &mut *(user_data as *mut GPIOPin) };
+    let pin = unsafe { &mut *(user_data as *mut Pin) };
     pin.watch_callback.as_mut().unwrap()(if value == 0 {
         PinValue::Low
     } else {
@@ -64,7 +64,7 @@ extern "C" fn pin_change_trampoline(user_data: *mut c_void, _pin_id: u32, value:
     });
 }
 
-impl GPIOPin {
+impl Pin {
     pub fn new(name: &str, mode: PinMode) -> Self {
         let c_name = CString::new(name).unwrap();
         let id = unsafe { pinInit(c_name.as_ptr(), mode as u32) };
@@ -135,7 +135,7 @@ impl GPIOPin {
 
         if result {
             unsafe {
-                PIN_REGISTRY.push(&mut *(self as *const _ as *mut GPIOPin));
+                PIN_REGISTRY.push(&mut *(self as *const _ as *mut Pin));
             }
         }
 
@@ -152,7 +152,7 @@ impl GPIOPin {
         }
 
         unsafe {
-            PIN_REGISTRY.retain(|&pin| pin != (self as *const _ as *mut GPIOPin));
+            PIN_REGISTRY.retain(|&pin| pin != (self as *const _ as *mut Pin));
         }
     }
 }

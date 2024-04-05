@@ -2,5 +2,5 @@
 // Author: Uri Shaked
 
 pub mod i2c;
-pub mod gpio;
+pub mod pin;
 pub mod println;

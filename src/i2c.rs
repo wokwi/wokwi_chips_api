@@ -5,12 +5,12 @@ use std::ffi::c_void;
 
 use wokwi_chip_ll::{i2cInit, I2CConfig};
 
-use crate::gpio::GPIOPin;
+use crate::pin::Pin;
 
 pub struct I2CDeviceConfig {
     pub address: u32,
-    pub scl: GPIOPin,
-    pub sda: GPIOPin,
+    pub scl: Pin,
+    pub sda: Pin,
 
     pub connect_callback: Option<Box<dyn FnMut(u32, bool) -> bool + 'static>>,
     pub read_callback: Option<Box<dyn FnMut() -> u8 + 'static>>,
@@ -59,11 +59,11 @@ extern "C" fn i2c_disconnect_trampoline(user_data: *mut c_void) {
 /// Example:
 ///
 /// ```rust
-/// use wokwi_chips_api::gpio::{GPIOPin, PinMode};
+/// use wokwi_chips_api::pin::{Pin, PinMode};
 /// use wokwi_chips_api::i2c::{I2CDeviceConfig, create};
 ///
-/// let scl = GPIOPin::new("SCL", PinMode::Output);
-/// let sda = GPIOPin::new("SDA", PinMode::Output);
+/// let scl = Pin::new("SCL", PinMode::Output);
+/// let sda = Pin::new("SDA", PinMode::Output);
 /// create(I2CDeviceConfig {
 ///     address: 0x42,
 ///     scl,
